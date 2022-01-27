@@ -1,10 +1,5 @@
 use gl;
-use std::{
-    ptr,
-    str,
-    ffi::CString,
-    path::Path,
-};
+use std::{ffi::CString, path::Path, ptr, str};
 
 pub struct Shader {
     pub program_id: u32,
@@ -12,7 +7,12 @@ pub struct Shader {
 
 pub struct ShaderBuilder {
     program_id: u32,
-    shaders: Vec::<u32>,
+    shaders: Vec<u32>,
+}
+
+pub struct ShaderUniform {
+    location: i32,
+    program_id: u32,
 }
 
 #[allow(dead_code)]
@@ -39,11 +39,11 @@ impl Shader {
 impl Into<gl::types::GLenum> for ShaderType {
     fn into(self) -> gl::types::GLenum {
         match self {
-            ShaderType::Vertex                  => { gl::VERTEX_SHADER          },
-            ShaderType::Fragment                => { gl::FRAGMENT_SHADER        },
-            ShaderType::TessellationControl     => { gl::TESS_CONTROL_SHADER    },
-            ShaderType::TessellationEvaluation  => { gl::TESS_EVALUATION_SHADER } ,
-            ShaderType::Geometry                => { gl::GEOMETRY_SHADER        },
+            ShaderType::Vertex => gl::VERTEX_SHADER,
+            ShaderType::Fragment => gl::FRAGMENT_SHADER,
+            ShaderType::TessellationControl => gl::TESS_CONTROL_SHADER,
+            ShaderType::TessellationEvaluation => gl::TESS_EVALUATION_SHADER,
+            ShaderType::Geometry => gl::GEOMETRY_SHADER,
         }
     }
 }
@@ -51,12 +51,12 @@ impl Into<gl::types::GLenum> for ShaderType {
 impl ShaderType {
     fn from_ext(ext: &std::ffi::OsStr) -> Result<ShaderType, String> {
         match ext.to_str().expect("Failed to read extension") {
-            "vert" => { Ok(ShaderType::Vertex) },
-            "frag" => { Ok(ShaderType::Fragment) },
-            "tcs"  => { Ok(ShaderType::TessellationControl) },
-            "tes"  => { Ok(ShaderType::TessellationEvaluation) },
-            "geom" => { Ok(ShaderType::Geometry) },
-            e => { Err(e.to_string()) },
+            "vert" => Ok(ShaderType::Vertex),
+            "frag" => Ok(ShaderType::Fragment),
+            "tcs" => Ok(ShaderType::TessellationControl),
+            "tes" => Ok(ShaderType::TessellationEvaluation),
+            "geom" => Ok(ShaderType::Geometry),
+            e => Err(e.to_string()),
         }
     }
 }
@@ -72,17 +72,24 @@ impl ShaderBuilder {
     pub unsafe fn attach_file(self, shader_path: &str) -> ShaderBuilder {
         let path = Path::new(shader_path);
         if let Some(extension) = path.extension() {
-            let shader_type = ShaderType::from_ext(extension)
-                .expect("Failed to parse file extension.");
+            let shader_type =
+                ShaderType::from_ext(extension).expect("Failed to parse file extension.");
             let shader_src = std::fs::read_to_string(path)
                 .expect(&format!("Failed to read shader source. {}", shader_path));
             self.compile_shader(&shader_src, shader_type)
         } else {
-            panic!("Failed to read extension of file with path: {}", shader_path);
+            panic!(
+                "Failed to read extension of file with path: {}",
+                shader_path
+            );
         }
     }
 
-    pub unsafe fn compile_shader(mut self, shader_src: &str, shader_type: ShaderType) -> ShaderBuilder {
+    pub unsafe fn compile_shader(
+        mut self,
+        shader_src: &str,
+        shader_type: ShaderType,
+    ) -> ShaderBuilder {
         let shader = gl::CreateShader(shader_type.into());
         let c_str_shader = CString::new(shader_src.as_bytes()).unwrap();
         gl::ShaderSource(shader, 1, &c_str_shader.as_ptr(), ptr::null());
@@ -109,7 +116,10 @@ impl ShaderBuilder {
                 ptr::null_mut(),
                 info_log.as_mut_ptr() as *mut gl::types::GLchar,
             );
-            println!("ERROR::Shader Compilation Failed!\n{}", String::from_utf8_lossy(&info_log));
+            println!(
+                "ERROR::Shader Compilation Failed!\n{}",
+                String::from_utf8_lossy(&info_log)
+            );
             return false;
         }
         true
@@ -127,7 +137,10 @@ impl ShaderBuilder {
                 ptr::null_mut(),
                 info_log.as_mut_ptr() as *mut gl::types::GLchar,
             );
-            println!("ERROR::SHADER::PROGRAM::COMPILATION_FAILED\n{}", String::from_utf8_lossy(&info_log));
+            println!(
+                "ERROR::SHADER::PROGRAM::COMPILATION_FAILED\n{}",
+                String::from_utf8_lossy(&info_log)
+            );
             return false;
         }
         true
@@ -148,7 +161,73 @@ impl ShaderBuilder {
         }
 
         Shader {
-            program_id: self.program_id
+            program_id: self.program_id,
         }
     }
+}
+
+impl ShaderUniform {
+    pub fn new(program: &Shader, uniform_name: &str) -> ShaderUniform {
+        let uniform_string = CString::new(uniform_name)
+            .expect("Could not convert uniform name to c_string");
+
+        let uniform_loc =
+            unsafe { gl::GetUniformLocation(program.program_id, uniform_string.as_ptr()) };
+        ShaderUniform {
+            program_id: program.program_id,
+            location: uniform_loc,
+        }
+    }
+
+    pub fn update1f(&self, value: f32) {
+        unsafe { gl::ProgramUniform1f(self.program_id, self.location, value) };
+    }
+
+    pub fn update2f(&self, value: &[f32; 2]) {
+        let v0 = value[0];
+        let v1 = value[1];
+        unsafe { gl::ProgramUniform2f(self.program_id, self.location, v0, v1) };
+    }
+
+    pub fn update3f(&self, value: &[f32; 3]) {
+        let v0 = value[0];
+        let v1 = value[1];
+        let v2 = value[2];
+        unsafe { gl::ProgramUniform3f(self.program_id, self.location, v0, v1, v2) };
+    }
+
+    pub fn update4f(&self, value: &[f32; 4]) {
+        let v0 = value[0];
+        let v1 = value[1];
+        let v2 = value[2];
+        let v3 = value[3];
+        unsafe { gl::ProgramUniform4f(self.program_id, self.location, v0, v1, v2, v3) };
+    }
+
+    pub fn updatefmat2(&self, value: &glm::Mat2, transpose: bool){
+        let mat_ptr = value.as_ptr();
+        unsafe {
+            gl::ProgramUniformMatrix2fv(
+                self.program_id,
+                self.location,
+                1,
+                transpose as u8,
+                mat_ptr
+            );
+        }
+    }
+
+    pub fn updatefmat4(&self, value: &glm::Mat4, transpose: bool){
+        let mat_ptr = value.as_ptr();
+        unsafe {
+            gl::ProgramUniformMatrix4fv(
+                self.program_id,
+                self.location,
+                1,
+                transpose as u8,
+                mat_ptr
+            );
+        }
+    }
+
 }

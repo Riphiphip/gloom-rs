@@ -1,8 +1,13 @@
 #version 430 core
 
 out vec4 color;
+in vec4 vertex_color;
+
+uniform vec2 screenDims;
+uniform float iTime;
 
 void main()
 {
-    color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    color = vertex_color;
 }
